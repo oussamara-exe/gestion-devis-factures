@@ -21,7 +21,7 @@ RUN mvn clean package -B -DskipTests
 RUN find /app/target -name "*.jar" -type f
 
 # Étape 2 : Runtime - Image optimisée pour exécuter le JAR
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:25-jre
 
 # Installer wget pour les healthchecks
 RUN apt-get update && apt-get install -y --no-install-recommends wget && \
