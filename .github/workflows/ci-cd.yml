@@ -212,8 +212,9 @@ jobs:
   notify-failure:
     name: Notify on Failure
     runs-on: ubuntu-latest
-    needs: [backend-test-build, frontend-test-build, docker-build-push, deploy]
-    if: failure()
+    needs: [backend-test-build, frontend-test-build]
+    if: failure() && (needs.backend-test-build.result == 'failure' || needs.frontend-test-build.result == 'failure')
+    continue-on-error: true
 
     steps:
       - name: Notify failure
