@@ -1,0 +1,86 @@
+# ============================================
+# Fichiers générés et fichiers sensibles
+# ============================================
+
+# Fichiers d'environnement
+.env
+.env.local
+.env.*.local
+
+# ============================================
+# Backend - Spring Boot / Maven
+# ============================================
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.project
+.classpath
+.settings/
+.class
+
+# Spring Boot
+*.log
+logs/
+application-local.properties
+
+# ============================================
+# Frontend - React / Node
+# ============================================
+
+# Dependencies
+frontend/node_modules/
+frontend/package-lock.json.backup
+
+# Build
+frontend/dist/
+frontend/build/
+frontend/.vite/
+
+# Tests
+frontend/coverage/
+frontend/.nyc_output/
+
+# Logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# ============================================
+# Docker
+# ============================================
+
+# Docker compose override
+docker-compose.override.yml
+
+# ============================================
+# Système
+# ============================================
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+

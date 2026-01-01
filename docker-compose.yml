@@ -1,0 +1,93 @@
+services:
+  # Service MySQL - Base de données
+  mysql:
+    image: mysql:8.0
+    container_name: gestion_devis_factures_db
+    restart: unless-stopped
+    environment:
+      # Variables d'environnement MySQL
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-gestion_devis_factures}
+      MYSQL_USER: ${MYSQL_USER:-appuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-apppassword}
+    ports:
+      # Exposer le port MySQL pour les outils externes (optionnel)
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      # Persistance des données dans un volume nommé
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      # Healthcheck pour s'assurer que MySQL est prêt avant de démarrer le backend
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # Service Backend - Spring Boot API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gestion_devis_factures_backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # Configuration Spring Boot via variables d'environnement
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-gestion_devis_factures}?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-appuser}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-apppassword}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: ${SPRING_JPA_SHOW_SQL:-false}
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQL8Dialect
+      # Configuration CORS - autoriser les requêtes depuis le frontend
+      SPRING_WEB_CORS_ALLOWED_ORIGINS: ${FRONTEND_URL:-http://localhost:3000}
+      SPRING_WEB_CORS_ALLOWED_METHODS: GET,POST,PUT,DELETE,OPTIONS
+      SPRING_WEB_CORS_ALLOWED_HEADERS: "*"
+      # Port du serveur
+      SERVER_PORT: 8080
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    networks:
+      - app-network
+    healthcheck:
+      # Healthcheck pour vérifier que le backend est prêt
+      # Utilise wget (disponible dans l'image) pour vérifier qu'un endpoint API répond
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/api/clients || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Service Frontend - React Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Passer VITE_API_URL au moment du build (nécessaire pour Vite)
+        # Utiliser le nom du service backend pour la communication interne Docker
+        VITE_API_URL: http://backend:8080
+    container_name: gestion_devis_factures_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    networks:
+      - app-network
+
+# Réseau Docker pour la communication entre les services
+networks:
+  app-network:
+    driver: bridge
+
+# Volumes pour la persistance des données
+volumes:
+  mysql_data:
+    driver: local
+

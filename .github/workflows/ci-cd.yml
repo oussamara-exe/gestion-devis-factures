@@ -1,0 +1,226 @@
+name: CI/CD Pipeline
+
+on:
+  # Déclenchement sur push et pull request vers main
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+env:
+  # Variables d'environnement globales
+  REGISTRY: docker.io
+  BACKEND_IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/gestion-devis-factures-backend
+  FRONTEND_IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/gestion-devis-factures-frontend
+  JAVA_VERSION: 17
+  NODE_VERSION: 20
+
+jobs:
+  # Job 1 : Tests et Build du Backend
+  backend-test-build:
+    name: Backend - Tests & Build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run Maven tests
+        run: mvn clean test -B
+        env:
+          # Configuration pour les tests (utilise H2 en mémoire)
+          SPRING_PROFILES_ACTIVE: test
+
+      - name: Build JAR
+        run: mvn clean package -B -DskipTests
+        # Les tests ont déjà été exécutés à l'étape précédente
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: target/*.jar
+          retention-days: 7
+
+      - name: Maven Dependency Check
+        run: mvn dependency-check:check || true
+        continue-on-error: true
+        # Optionnel : scan de sécurité des dépendances Maven
+
+  # Job 2 : Tests et Build du Frontend
+  frontend-test-build:
+    name: Frontend - Tests & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./frontend
+        run: npm run lint || true
+        continue-on-error: true
+
+      - name: Run tests
+        working-directory: ./frontend
+        run: npm test -- --run
+        env:
+          CI: true
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+        env:
+          # Variable d'environnement pour la build (si nécessaire)
+          VITE_API_URL: ${{ secrets.VITE_API_URL || 'http://localhost:8080' }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/dist
+          retention-days: 7
+
+      - name: Run npm audit
+        working-directory: ./frontend
+        run: npm audit --audit-level=moderate || true
+        continue-on-error: true
+        # Scan de sécurité npm
+
+  # Job 3 : Build et Push des images Docker
+  docker-build-push:
+    name: Docker - Build & Push
+    runs-on: ubuntu-latest
+    needs: [backend-test-build, frontend-test-build]
+    # Exécution uniquement si les tests passent
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata for backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BACKEND_IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.BACKEND_IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.BACKEND_IMAGE_NAME }}:buildcache,mode=max
+
+      - name: Extract metadata for frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.FRONTEND_IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          build-args: |
+            VITE_API_URL=${{ secrets.VITE_API_URL || 'http://localhost:8080' }}
+          cache-from: type=registry,ref=${{ env.FRONTEND_IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.FRONTEND_IMAGE_NAME }}:buildcache,mode=max
+
+  # Job 4 : Déploiement (optionnel - à configurer selon votre plateforme)
+  deploy:
+    name: Deploy Application
+    runs-on: ubuntu-latest
+    needs: [docker-build-push]
+    # Exécution uniquement sur la branche main/master après un push
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    environment:
+      name: production
+      url: ${{ secrets.DEPLOYMENT_URL }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deployment notification
+        run: |
+          echo "🚀 Déploiement déclenché pour le commit ${{ github.sha }}"
+          echo "Backend image: ${{ env.BACKEND_IMAGE_NAME }}:latest"
+          echo "Frontend image: ${{ env.FRONTEND_IMAGE_NAME }}:latest"
+          # Ici vous pouvez ajouter des appels API pour déployer sur votre plateforme
+          # Exemples :
+          # - Render.com : curl -X POST ...
+          # - Railway.app : railway up
+          # - Fly.io : flyctl deploy
+          # - Vercel : vercel --prod
+
+      # Exemple de déploiement sur Render (à adapter selon vos besoins)
+      # - name: Deploy to Render
+      #   run: |
+      #     curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" || true
+
+  # Job 5 : Notification en cas d'échec (optionnel)
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [backend-test-build, frontend-test-build, docker-build-push, deploy]
+    if: failure()
+
+    steps:
+      - name: Notify failure
+        run: |
+          echo "❌ Le pipeline CI/CD a échoué !"
+          echo "Veuillez vérifier les logs pour plus de détails."
+          # Ici vous pouvez ajouter des notifications :
+          # - Slack webhook
+          # - Email
+          # - Discord
+          # - Microsoft Teams
+          # Exemple Slack :
+          # curl -X POST -H 'Content-type: application/json' \
+          #   --data '{"text":"Pipeline CI/CD échoué : ${{ github.event.pull_request.html_url || github.event.head_commit.url }}"}' \
+          #   ${{ secrets.SLACK_WEBHOOK_URL }}
+

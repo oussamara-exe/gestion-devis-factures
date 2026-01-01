@@ -1,0 +1,42 @@
+services:
+  # Backend Spring Boot Service
+  - type: web
+    name: gestion-devis-factures-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: frankfurt
+    plan: starter
+    envVars:
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+        value: jdbc:mysql://mysql:3306/gestion_devis_factures
+      - key: SPRING_DATASOURCE_USERNAME
+        fromDatabase:
+          name: gestion-devis-factures-db
+          property: user
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: gestion-devis-factures-db
+          property: password
+      - key: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+        value: com.mysql.cj.jdbc.Driver
+      - key: SPRING_JPA_HIBERNATE_DDL_AUTO
+        value: update
+      - key: SPRING_JPA_SHOW_SQL
+        value: "false"
+      - key: SPRING_WEB_CORS_ALLOWED_ORIGINS
+        sync: false
+        value: https://votre-frontend.vercel.app
+      - key: SERVER_PORT
+        value: "8080"
+    healthCheckPath: /api/clients
+
+  # MySQL Database
+  - type: pspg
+    name: gestion-devis-factures-db
+    region: frankfurt
+    plan: starter
+    databaseName: gestion_devis_factures
+    databaseUser: appuser
+
