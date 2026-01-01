@@ -1,5 +1,5 @@
 # Étape 1 : Build - Compilation de l'application Spring Boot avec Maven
-FROM maven:3.9-eclipse-temurin-17 AS builder
+FROM maven:3-eclipse-temurin-25 AS builder
 
 # Définir le répertoire de travail
 WORKDIR /app
