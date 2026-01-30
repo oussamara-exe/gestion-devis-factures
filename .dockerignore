@@ -1,0 +1,58 @@
+# Fichiers et dossiers à exclure lors du build Docker pour le backend
+# Cela accélère le build et réduit la taille du contexte Docker
+
+# Dossiers de build
+target/
+.mvn/
+mvnw
+mvnw.cmd
+
+# Fichiers IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.project
+.classpath
+.settings/
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Fichiers de configuration locaux
+.env
+.env.local
+application-local.properties
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+README.md
+docs/
+
+# Tests et rapports
+test-results/
+coverage/
+surefire-reports/
+
+# Frontend (géré séparément)
+frontend/
+
+# Fichiers Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
