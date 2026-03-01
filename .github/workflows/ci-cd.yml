@@ -46,7 +46,7 @@ jobs:
         # Les tests ont déjà été exécutés à l'étape précédente
 
       - name: Upload JAR artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-jar
           path: target/*.jar
@@ -97,7 +97,7 @@ jobs:
           VITE_API_URL: ${{ secrets.VITE_API_URL || 'http://localhost:8080' }}
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-build
           path: frontend/dist
